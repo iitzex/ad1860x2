@@ -47,13 +47,12 @@ localparam  L_TRANSFER = 5;
 localparam  L_DONE = 6;
 localparam  FLASH = 7;
 
-reg     lrck_r;
-reg     lrck_rr;
+reg lrck_r;
+reg lrck_rr;
 wire left_start = ~lrck_r & lrck_rr;
 wire right_start = lrck_r & ~lrck_rr;
 
-
-always @(negedge bck_i) begin
+always @(negedge bck_i or negedge rst_i) begin
     if (!rst_i) begin
         lrck_r <= 0;
         lrck_rr <= 0;
@@ -65,8 +64,8 @@ always @(negedge bck_i) begin
 end
 
 reg             data_r;
-reg[4:0]        state;
-reg[7:0]        count;
+reg[3:0]        state;
+reg[6:0]        count;
 reg signed [BIT-1:0]    val;
 reg signed [BIT-1:0]    l_val;
 reg signed [BIT-1:0]    l_val_rr;
@@ -74,9 +73,9 @@ reg signed [BIT-1:0]    r_val;
 reg signed [BIT-1:0]    r_val_rr;
 
 reg [5:0] noise;
-always @(posedge bck_i or negedge rst_i) begin
+always @(negedge bck_i or negedge rst_i) begin
     if (!rst_i)
-        noise <= 8'h1;
+        noise <= 6'h1;
     else
         noise <= {noise[4:0], noise[5] ^ noise[4] ^ noise[1]};
 end
@@ -112,7 +111,7 @@ always @(negedge bck_i or negedge rst_i) begin
                         state <= R_DONE;
                     end
                     else if (count < E) begin
-                        val <= {val, data_r};
+                        val <= {val[BIT-2:0], data_r};
                         count <= count + 1;
                     end
                 end
@@ -129,7 +128,7 @@ always @(negedge bck_i or negedge rst_i) begin
                         state <= L_DONE;
                     end
                     else if (count < E) begin
-                        val <= {val, data_r};
+                        val <= {val[BIT-2:0], data_r};
                         count <= count + 1;
                     end
                 end
@@ -160,8 +159,8 @@ assign  data_o = bck_i;
 
 localparam  WORD = 18;
 // localparam  WORD = 16;
-reg [4:0]       state_w;
-reg [7:0]       count_w;
+reg [3:0]       state_w;
+reg [6:0]       count_w;
 reg [BIT-1:0]      key;
 reg [BIT-1:0]      key1;
 reg [BIT-1:0]      key2;
@@ -198,7 +197,7 @@ always @(negedge bck_i or negedge rst_i) begin
     end
     else if (right_start) begin
         key <= r_val_rr + r_val_rr[5:0];;
-        key2 <= l_val_rr + r_val_rr[5:0];;
+        key2 <= l_val_rr + l_val_rr[5:0];;
         key3 <= r_val_rr + r_val_rr[5:0];;
 
         le <= 1;
