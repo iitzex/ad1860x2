@@ -44,6 +44,6 @@ unprotect:
 	openFPGALoader  -c dirtyJtag --unprotect-flash
 
 clean:
-	rm -f *.svf *.bit *.config *.json *.ys *bom *out
+	rm -f *.svf *.bit *.config *.json *.ys *bom *out *.vcd
 
 .PHONY: all prog clean
