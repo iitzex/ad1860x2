@@ -1,38 +1,37 @@
 module i2s(
-    input               rst_i,
+    input         rst_i,
 
-    input               mck_i,
-    input               lrck_i,
-    input               bck_i,
-    input               data_i,
+    input         mck_i,
+    input         lrck_i,
+    input         bck_i,
+    input         data_i,
 
-    output              mck_o,
-    output              lrck_o,
-    output              bck_o,
-    output              data_o,
+    output        mck_o,
+    output        lrck_o,
+    output        bck_o,
+    output        data_o,
 
 // 4 output
-    output              mck,
-    output reg          le,
-    output              bck,
-    output reg          sdo,
+    output        mck,
+    output reg    le,
+    output        bck,
+    output reg    sdo,
 
-    output              mck1,
-    output reg          le1,
-    output              bck1,
-    output reg          sdo1,
+    output        mck1,
+    output reg    le1,
+    output        bck1,
+    output reg    sdo1,
 
-    output              mck2,
-    output reg          le2,
-    output              bck2,
-    output reg          sdo2,
+    output        mck2,
+    output reg    le2,
+    output        bck2,
+    output reg    sdo2,
 
-    output              mck3,
-    output reg          le3,
-    output              bck3,
-    output reg          sdo3
+    output        mck3,
+    output reg    le3,
+    output        bck3,
+    output reg    sdo3
 );
-
 
 localparam  BIT = 24;
 localparam  B= 0;
@@ -72,14 +71,17 @@ reg signed [BIT-1:0]    l_val_rr;
 reg signed [BIT-1:0]    r_val;
 reg signed [BIT-1:0]    r_val_rr;
 
-reg [5:0] noise;
+reg [7:0] noise_a, noise_b;
 always @(negedge bck_i or negedge rst_i) begin
-    if (!rst_i)
-        noise <= 6'h1;
-    else
-        noise <= {noise[4:0], noise[5] ^ noise[4] ^ noise[1]};
+    if (!rst_i) begin
+        noise_a <= 8'h1;
+        noise_b <= 8'h2;
+    end else begin
+        noise_a <= {noise_a[6:0], noise_a[7] ^ noise_a[5] ^ noise_a[4] ^ noise_a[3]};
+        noise_b <= {noise_b[6:0], noise_b[7] ^ noise_b[5] ^ noise_b[4] ^ noise_b[3]};
+    end
 end
-wire signed [6:0] dither_noise = {1'b0, noise} - 7'sd32; // range: [-32, +31]
+wire signed [8:0] dither_noise = {1'b0, noise_a} + {1'b0, noise_b}; // [-255, +255]
 
 always @(negedge bck_i or negedge rst_i) begin
     if (!rst_i) begin
@@ -118,7 +120,7 @@ always @(negedge bck_i or negedge rst_i) begin
                 R_DONE: begin
                     r_val <= val;
                     // r_val_rr <= r_val;
-                    r_val_rr <= r_val + {{17{dither_noise[6]}}, dither_noise};
+                    r_val_rr <= r_val + {{15{dither_noise[6]}}, dither_noise};
  
                     state <= IDLE;
                 end
@@ -134,8 +136,8 @@ always @(negedge bck_i or negedge rst_i) begin
                 end
                 L_DONE: begin
                     l_val <= val;
-                    // l_val_rr <= val_r;
-                    l_val_rr <= l_val + {{17{dither_noise[6]}}, dither_noise}; 
+                    // l_val_rr <= l_val;
+                    l_val_rr <= l_val + {{15{dither_noise[6]}}, dither_noise}; 
 
                     state <= IDLE;
                 end
@@ -157,14 +159,14 @@ assign  bck_o = bck_i;
 assign  lrck_o = lrck_i;
 assign  data_o = bck_i;
 
-localparam  WORD = 18;
-// localparam  WORD = 16;
+// localparam  WORD = 18;
+localparam  WORD = 16;
 reg [3:0]       state_w;
 reg [6:0]       count_w;
-reg [BIT-1:0]      key;
-reg [BIT-1:0]      key1;
-reg [BIT-1:0]      key2;
-reg [BIT-1:0]      key3;
+reg signed [BIT-1:0]      key;
+reg signed [BIT-1:0]      key1;
+reg signed [BIT-1:0]      key2;
+reg signed [BIT-1:0]      key3;
 
 always @(negedge bck_i or negedge rst_i) begin
     if (!rst_i)  begin
@@ -185,9 +187,11 @@ always @(negedge bck_i or negedge rst_i) begin
         state_w <= IDLE;
     end
     else if (left_start) begin
-        key <= l_val_rr + l_val_rr[5:0];
-        key2 <= l_val_rr + l_val_rr[5:0];;
-        key3 <= r_val_rr + r_val_rr[5:0];;
+        key <= l_val_rr + l_val_rr[7:0];
+        // key2 <= l_val_rr;
+        // key3 <= r_val_rr;
+        key2 <= l_val_rr + {l_val_rr[7], {7{1'b0}}};
+        key3 <= r_val_rr + {r_val_rr[7], {7{1'b0}}};
 
         le <= 1;
         le2 <= 1;
@@ -196,9 +200,11 @@ always @(negedge bck_i or negedge rst_i) begin
         state_w <= FLASH;
     end
     else if (right_start) begin
-        key <= r_val_rr + r_val_rr[5:0];;
-        key2 <= l_val_rr + l_val_rr[5:0];;
-        key3 <= r_val_rr + r_val_rr[5:0];;
+        key <= r_val_rr + r_val_rr[7:0];;
+        key2 <= l_val_rr;
+        key3 <= r_val_rr;
+        key2 <= l_val_rr + {l_val_rr[7], {7{1'b0}}};
+        key3 <= r_val_rr + {r_val_rr[7], {7{1'b0}}};
 
         le <= 1;
         le2 <= 1;
